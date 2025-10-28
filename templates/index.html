@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Movie Sentiment Analyzer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <!-- We don't need jsPDF or html2canvas anymore! The server does the work. -->
+
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif;
+            /* New subtle background pattern */
+            background-color: #111827; /* gray-900 */
+            background-image: radial-gradient(#374151 .5px, transparent .5px);
+            background-size: 10px 10px;
+        }
+        
+        #bg-video {
+            position: fixed; top: 50%; left: 50%;
+            min-width: 100%; min-height: 100%;
+            width: auto; height: auto; z-index: -10;
+            transform: translateX(-50%) translateY(-50%);
+            object-fit: cover; 
+            /* New opacity for a more subtle video */
+            opacity: 0.15;
+        }
+
+        /* === NEW: Shining Logo Animation === */
+        @keyframes shine {
+            0% { background-position: -200% center; }
+            100% { background-position: 200% center; }
+        }
+
+        .shine-logo {
+            background: linear-gradient(to right, #93c5fd 20%, #a78bfa 40%, #c4b5fd 60%, #93c5fd 80%);
+            background-size: 200% auto;
+            color: transparent;
+            background-clip: text;
+            -webkit-background-clip: text;
+            animation: shine 5s linear infinite;
+        }
+        /* === End of Logo Animation === */
+
+
+        /* === NEW: Fade-in Animations === */
+        @keyframes floatIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .float-in {
+            animation: floatIn 0.7s ease-out forwards;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+        /* === End of Animations === */
+
+
+        #result-sentiment.positive { color: #22c55e; } /* green-500 */
+        #result-sentiment.negative { color: #ef4444; } /* red-500 */
+        .icon-positive { color: #22c55e; }
+        .icon-negative { color: #ef4444; }
+
+
+        /* New Search Dropdown Styles */
+        #search-results {
+            position: absolute;
+            width: 100%;
+            background-color: #1f2937; /* gray-800 */
+            border: 1px solid #4b5563; /* gray-600 */
+            border-top: none;
+            border-radius: 0 0 0.5rem 0.5rem;
+            z-index: 10;
+            max-height: 300px;
+            overflow-y: auto;
+            /* Smooth transition for showing/hiding */
+            transition: all 0.3s ease;
+            opacity: 0;
+            transform: translateY(-10px);
+            pointer-events: none;
+        }
+        #search-results.visible {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+        .search-item {
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+            border-bottom: 1px solid #374151; /* gray-700 */
+            transition: background-color 0.2s ease;
+        }
+        .search-item:last-child { border-bottom: none; }
+        .search-item:hover { background-color: #374151; } /* gray-700 */
+        .search-item-title { font-weight: 500; color: white; }
+        .search-item-year { font-size: 0.875rem; color: #9ca3af; margin-left: 0.5rem; }
+    </style>
+</head>
+<body class="bg-gray-900 text-white">
+
+    <video autoplay muted loop id="bg-video">
+        <source src="{{ url_for('static', filename='background.mp4') }}" type="video/mp4">
+        Your browser does not support the video tag.
+    </video>
+
+    <div class="min-h-screen flex items-center justify-center p-4">
+        
+        <!-- NEW: Added 'float-in' animation class -->
+        <div class="float-in w-full max-w-2xl bg-gray-900/70 backdrop-blur-xl rounded-2xl shadow-2xl p-6 md:p-10 border border-gray-700">
+
+            <!-- NEW: Added 'shine-logo' class -->
+            <h1 class="shine-logo text-3xl md:text-4xl font-bold text-center mb-6">
+                Movie Sentiment Analyzer
+            </h1>
+            <p class="text-center text-gray-400 mb-8">
+                Search for a movie, write your review, and get a full sentiment analysis.
+            </p>
+
+            <div class="mb-4 relative">
+                <label for="movie-name" class="block text-sm font-medium text-gray-300 mb-2">Movie Name</label>
+                <input type="text" id="movie-name"
+                    class="w-full p-3 bg-gray-800 border-2 border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-300"
+                    placeholder="Search for a movie... e.g., The Matrix" autocomplete="off">
+                
+                <!-- NEW: Search container. JS will add 'visible' class -->
+                <div id="search-results"></div>
+            </div>
+
+            <div>
+                <label for="review-text" class="block text-sm font-medium text-gray-300 mb-2">Movie Review</label>
+                <textarea id="review-text"
+                    class="w-full h-40 p-4 bg-gray-800 border-2 border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-300 resize-none"
+                    placeholder="Write your movie review here..." required></textarea>
+            </div>
+
+            <!-- NEW: Updated button styles with gradient and transitions -->
+            <button id="analyze-button"
+                class="w-full mt-6 py-3 px-6 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white text-lg font-semibold rounded-lg shadow-lg transition-all duration-300 ease-in-out transform hover:scale-105 disabled:opacity-50 disabled:scale-100">
+                Analyze
+            </button>
+
+            <!-- Result Display Area -->
+            <div id="result-area" class="mt-8" style="display: none;">
+                <!-- This inner div is just for visual grouping -->
+                <div id="report-content" class="p-6 bg-gray-800 rounded-lg border border-gray-700">
+                    
+                    <img id="movie-poster" src="" alt="Movie Poster" class="w-1/2 max-w-[200px] mx-auto rounded-lg shadow-lg mb-6" style="display: none;">
+                    
+                    <div class="text-center">
+                        <svg id="icon-positive" class="h-16 w-16 icon-positive mx-auto mb-2" style="display: none;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15.182 15.182a4.5 4.5 0 01-6.364 0M21 12a9 9 0 11-18 0 9 9 0 0118 0zM9.75 9.75c0 .414-.168.75-.375.75S9 10.164 9 9.75s.168-.75.375-.75S9.75 9.336 9.75 9.75zm.375 0h.008v.015h-.008V9.75zm5.625 0c0 .414-.168.75-.375.75s-.375-.336-.375-.75.168-.75.375-.75.375.336.375.75zm.375 0h.008v.015h-.008V9.75z" />
+                        </svg>
+                        <svg id="icon-negative" class="h-16 w-16 icon-negative mx-auto mb-2" style="display: none;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15.182 16.5a4.5 4.5 0 01-6.364 0M21 12a9 9 0 11-18 0 9 9 0 0118 0zM9.75 9.75c0 .414-.168.75-.375.75S9 10.164 9 9.75s.168-.75.375-.75S9.75 9.336 9.75 9.75zm.375 0h.008v.015h-.008V9.75zm5.625 0c0 .414-.168.75-.375.75s-.375-.336-.375-.75.168-.75.375-.75.375.336.375.75zm.375 0h.008v.015h-.008V9.75z" />
+                        </svg>
+
+                        <p id="result-sentiment" class="text-4xl font-bold mb-3"></p>
+                        <p id="result-confidence" class="text-xl text-gray-200 mb-1"></p>
+                        <p id="result-raw-score" class="text-sm text-gray-400"></p>
+                    </div>
+                </div>
+                
+                <!-- NEW: Updated Download Button Style -->
+                <button id="download-button"
+                    class="w-full mt-4 py-2 px-4 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-lg transition-all duration-300 ease-in-out transform hover:scale-105 disabled:opacity-50 disabled:scale-100">
+                    Download PDF Report
+                </button>
+            </div>
+
+
+            <!-- Loading Spinner -->
+            <div id="loading-spinner" class="mt-8 text-center" style="display: none;">
+                <svg class="animate-spin h-8 w-8 text-white mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <p class="mt-2 text-gray-300">Analyzing...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 
+      ===============================================================
+      == JAVASCRIPT LOGIC (Download Function is Re-written) ==
+      ===============================================================
+    -->
+    <script>
+        // --- Element References ---
+        const movieNameInput = document.getElementById('movie-name');
+        const searchResults = document.getElementById('search-results');
+        const reviewText = document.getElementById('review-text');
+        const analyzeButton = document.getElementById('analyze-button');
+        
+        const resultArea = document.getElementById('result-area');
+        const moviePoster = document.getElementById('movie-poster');
+        
+        const resultSentiment = document.getElementById('result-sentiment');
+        const resultConfidence = document.getElementById('result-confidence');
+        const resultRawScore = document.getElementById('result-raw-score');
+        
+        const loadingSpinner = document.getElementById('loading-spinner');
+        const iconPositive = document.getElementById('icon-positive');
+        const iconNegative = document.getElementById('icon-negative');
+        const downloadButton = document.getElementById('download-button');
+
+        // --- Global State ---
+        let selectedMoviePosterPath = null;
+        let debounceTimer;
+
+        // --- Debounce Function (for search) ---
+        function debounce(func, delay) {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(func, delay);
+        }
+
+        // --- Function to Search for Movies ---
+        async function searchMovies() {
+            const query = movieNameInput.value.trim();
+            if (query.length < 3) {
+                searchResults.classList.remove('visible');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/search_movie?query=${encodeURIComponent(query)}`);
+                if (!response.ok) throw new Error('Search failed');
+                
+                const movies = await response.json();
+                
+                searchResults.innerHTML = ''; // Clear old results
+                if (movies.length > 0) {
+                    movies.forEach(movie => {
+                        const item = document.createElement('div');
+                        item.className = 'search-item';
+                        item.innerHTML = `
+                            <span class="search-item-title">${movie.title}</span>
+                            <span class="search-item-year">(${movie.year || 'N/A'})</span>
+                        `;
+                        item.addEventListener('click', () => selectMovie(movie));
+                        searchResults.appendChild(item);
+                    });
+                    searchResults.classList.add('visible');
+                } else {
+                    searchResults.classList.remove('visible');
+                }
+            } catch (error) {
+                console.error('Search error:', error);
+                searchResults.classList.remove('visible');
+            }
+        }
+
+        // --- Function to Select a Movie from Dropdown ---
+        function selectMovie(movie) {
+            movieNameInput.value = movie.title;
+            selectedMoviePosterPath = movie.poster_path;
+            searchResults.classList.remove('visible');
+            searchResults.innerHTML = '';
+        }
+
+        // --- Event Listeners for Movie Search ---
+        movieNameInput.addEventListener('keyup', () => {
+            debounce(searchMovies, 300); // Wait 300ms
+        });
+        
+        document.addEventListener('click', (e) => {
+            // Hide if clicked outside the search input and results
+            if (!movieNameInput.contains(e.target) && !searchResults.contains(e.target)) {
+                searchResults.classList.remove('visible');
+            }
+        });
+
+
+        // --- Event Listener for Analyze Button ---
+        analyzeButton.addEventListener('click', () => {
+            const review = reviewText.value;
+            if (!review.trim()) {
+                alert("Please enter a review first.");
+                return;
+            }
+
+            loadingSpinner.style.display = 'block';
+            resultArea.style.display = 'none';
+            resultArea.classList.remove('fade-in'); // Remove for re-animation
+            analyzeButton.disabled = true;
+            analyzeButton.textContent = 'Analyzing...';
+            iconPositive.style.display = 'none';
+            iconNegative.style.display = 'none';
+
+            fetch('/predict', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ review: review })
+            })
+            .then(response => response.json())
+            .then(data => {
+                loadingSpinner.style.display = 'none';
+                analyzeButton.disabled = false;
+                analyzeButton.textContent = 'Analyze';
+
+                if (data.sentiment) {
+                    resultArea.style.display = 'block';
+                    resultArea.classList.add('fade-in'); // Add fade-in animation
+                    
+                    if (selectedMoviePosterPath) {
+                        moviePoster.src = `https://image.tmdb.org/t/p/w500${selectedMoviePosterPath}`;
+                        moviePoster.style.display = 'block';
+                    } else {
+                        moviePoster.src = '';
+                        moviePoster.style.display = 'none';
+                    }
+
+                    resultSentiment.textContent = data.sentiment;
+                    let confidence;
+                    if (data.sentiment === 'Positive') {
+                        resultSentiment.className = 'text-4xl font-bold mb-3 positive';
+                        iconPositive.style.display = 'inline-block';
+                        iconNegative.style.display = 'none';
+                        confidence = data.score * 100;
+                    } else {
+                        resultSentiment.className = 'text-4xl font-bold mb-3 negative';
+                        iconPositive.style.display = 'none';
+                        iconNegative.style.display = 'inline-block';
+                        confidence = (1 - data.score) * 100;
+                    }
+                    
+                    resultConfidence.textContent = `Confidence: ${confidence.toFixed(2)}%`;
+                    resultRawScore.textContent = `Raw Score: ${data.score.toFixed(4)}`;
+
+                } else {
+                    alert('Error: Could not get a prediction.');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                loadingSpinner.style.display = 'none';
+                analyzeButton.disabled = false;
+                analyzeButton.textContent = 'Analyze';
+                alert('An error occurred. Please check the console (F12) for details.');
+            });
+        });
+
+        // --- NEW: Event Listener for Download Button (Server-side) ---
+        downloadButton.addEventListener('click', async () => {
+            const movieName = movieNameInput.value.trim() || 'Movie_Report';
+            const fileName = `${movieName.replace(/[^a-z0-9]/gi, '_')}_Analysis.pdf`;
+
+            // 1. Show loading state on button
+            downloadButton.disabled = true;
+            downloadButton.textContent = 'Generating PDF...';
+
+            try {
+                // 2. Gather all data to send to the server
+                const postData = {
+                    movie_name: movieNameInput.value.trim() || "Untitled Analysis",
+                    poster_url: moviePoster.src, // Send the full poster URL
+                    sentiment: resultSentiment.textContent,
+                    confidence: resultConfidence.textContent,
+                    raw_score: resultRawScore.textContent,
+                    review_text: reviewText.value.trim()
+                };
+
+                // 3. Call the new /download_pdf route
+                const response = await fetch('/download_pdf', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(postData)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Server failed to generate PDF.');
+                }
+
+                // 4. Get the PDF data as a "blob"
+                const blob = await response.blob();
+                
+                // 5. Create a temporary link to trigger the download
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = fileName;
+                
+                document.body.appendChild(a);
+                a.click();
+                
+                // 6. Clean up
+                window.URL.revokeObjectURL(url);
+                a.remove();
+
+            } catch (error) {
+                console.error('PDF Download Error:', error);
+                alert(`An error occurred while generating the PDF: ${error.message}`);
+            } finally {
+                // 7. Reset button state
+                downloadButton.disabled = false;
+                downloadButton.textContent = 'Download PDF Report';
+            }
+        });
+
+    </script>
+</body>
+</html>
