@@ -24,13 +24,18 @@ app = Flask(__name__)
 VOCABULARY_SIZE = 10000
 MAX_LEN = 500
 
-# --- Load Model and Word Index ---
-print("Loading Keras model...")
-model = load_model('saved_model/sentiment_lstm_model.h5')
+# --- FIX: Use absolute paths to load model and word index ---
+# This ensures the server can find the files regardless of the working directory.
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(BASE_DIR, 'saved_model', 'sentiment_lstm_model.h5')
+WORD_INDEX_PATH = os.path.join(BASE_DIR, 'word_index.json')
+
+print(f"Loading Keras model from: {MODEL_PATH}")
+model = load_model(MODEL_PATH)
 print("Model loaded.")
 
-print("Loading word index from word_index.json...")
-with open('word_index.json') as f:
+print(f"Loading word index from: {WORD_INDEX_PATH}")
+with open(WORD_INDEX_PATH) as f:
     word_to_id = json.load(f)
 print("Word index loaded.")
 
@@ -213,6 +218,3 @@ def download_pdf():
 if __name__ == '__main__':
     print("\nStarting Flask server... Go to http://127.0.0.1:5000 in your browser.")
     app.run(debug=True)
-
-
-
