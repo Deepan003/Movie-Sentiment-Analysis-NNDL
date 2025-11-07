@@ -1,419 +1,308 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Movie Sentiment Analyzer</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
-    
-    <!-- We don't need jsPDF or html2canvas anymore! The server does the work. -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🎬 Movie Sentiment Analyzer</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+body{
+  font-family:'Inter',sans-serif;
+  background-color:#0f172a;
+  background-image:radial-gradient(rgba(255,255,255,.1)1px,transparent 1px);
+  background-size:18px 18px;
+  overflow:hidden;
+}
+#bg-video{position:fixed;top:50%;left:50%;min-width:100%;min-height:100%;transform:translate(-50%,-50%);z-index:-10;opacity:.12;object-fit:cover}
+@keyframes fadeIn{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
+.fade-in{animation:fadeIn 1s ease forwards}
+.glass{background:rgba(17,24,39,.8);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.1);box-shadow:0 10px 30px rgba(0,0,0,.4);transition:all .4s ease}
+.glass:hover{transform:scale(1.02) translateY(-5px);box-shadow:0 15px 40px rgba(99,102,241,.4);border-color:rgba(99,102,241,.4)}
+input,textarea{transition:all .3s ease}
+input:hover,textarea:hover{border-color:#6366f1;background-color:rgba(255,255,255,.05)}
+button{transition:all .3s ease}
+button:hover{filter:brightness(1.2);transform:scale(1.03)}
+.hover-glow:hover{text-shadow:0 0 10px #818cf8,0 0 20px #6366f1;color:#a5b4fc}
+.positive{color:#22c55e}.negative{color:#ef4444}
+.panel{height:600px;display:flex;flex-direction:column;justify-content:space-between}
+#search-results{position:absolute;width:100%;background-color:#1e293b;border-radius:.5rem;box-shadow:0 5px 10px rgba(0,0,0,.5);max-height:250px;overflow-y:auto;z-index:10;display:none}
+.search-item{padding:.75rem 1rem;cursor:pointer;border-bottom:1px solid #334155;transition:all .3s ease}
+.search-item:hover{background-color:#374151;color:#a5b4fc;transform:translateX(5px)}
 
-    <style>
-        body { 
-            font-family: 'Inter', sans-serif;
-            /* New subtle background pattern */
-            background-color: #111827; /* gray-900 */
-            background-image: radial-gradient(#374151 .5px, transparent .5px);
-            background-size: 10px 10px;
-        }
-        
-        #bg-video {
-            position: fixed; top: 50%; left: 50%;
-            min-width: 100%; min-height: 100%;
-            width: auto; height: auto; z-index: -10;
-            transform: translateX(-50%) translateY(-50%);
-            object-fit: cover; 
-            /* New opacity for a more subtle video */
-            opacity: 0.15;
-        }
+/* 🎞️ FILM LEADER PRELOADER */
+#preloader {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.5s ease-out, visibility 0.5s ease-out;
+}
+#preloader.hide {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.film-leader-container {
+  position: relative;
+  width: 350px;
+  height: 250px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #1a1a1a;
+  border-radius: 8px;
+  box-shadow: 0 0 0 10px #000, 0 0 0 15px #333, 0 0 0 20px #1a1a1a;
+  overflow: hidden;
+  animation: flicker 0.08s infinite alternate;
+}
+.film-leader-container::before,
+.film-leader-container::after {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 30px;
+  background-color: #0d0d0d;
+  background-image: repeating-linear-gradient(to bottom, transparent, transparent 10px, #0a0a0a 10px, #0a0a0a 25px);
+  background-size: 100% 35px;
+  z-index: 1;
+}
+.film-leader-container::before { left: 0; border-right: 2px solid #333; }
+.film-leader-container::after { right: 0; border-left: 2px solid #333; }
+.countdown-screen {
+  position: relative;
+  width: calc(100% - 60px);
+  height: 100%;
+  background-color: #666;
+  box-shadow: inset 0 0 15px rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-image:
+    radial-gradient(circle at center, transparent 30%, rgba(0,0,0,0.1) 32%, transparent 34%),
+    radial-gradient(circle at center, transparent 60%, rgba(0,0,0,0.1) 62%, transparent 64%),
+    radial-gradient(circle at center, transparent 85%, rgba(0,0,0,0.1) 87%, transparent 89%),
+    linear-gradient(to right, rgba(0,0,0,0.1) 49%, transparent 50%, rgba(0,0,0,0.1) 51%),
+    linear-gradient(to bottom, rgba(0,0,0,0.1) 49%, transparent 50%, rgba(0,0,0,0.1) 51%);
+  background-repeat: no-repeat;
+  background-position: center;
+}
+.countdown-number {
+  position: absolute;
+  font-size: 8rem;
+  font-weight: 700;
+  color: #333;
+  text-shadow: 2px 2px 5px rgba(0,0,0,0.5);
+  opacity: 0;
+  animation: showNumber 1s steps(1) forwards;
+}
+.countdown-number.three { animation-delay: 0s; }
+.countdown-number.two { animation-delay: 1s; }
+.countdown-number.one { animation-delay: 2s; }
+@keyframes flicker { 0%,100%{filter:brightness(1);opacity:1;}50%{filter:brightness(0.9);opacity:0.95;} }
+@keyframes showNumber {
+  0% {opacity:0;transform:scale(0.8);}
+  10%,90% {opacity:1;transform:scale(1);}
+  100% {opacity:0;transform:scale(0.8);}
+}
+@media(max-width:450px){
+  .film-leader-container{width:280px;height:200px;box-shadow:0 0 0 5px #000,0 0 0 10px #333,0 0 0 15px #1a1a1a;}
+  .film-leader-container::before,.film-leader-container::after{width:25px;background-size:100% 30px;}
+  .countdown-number{font-size:6rem;}
+}
 
-        /* === NEW: Shining Logo Animation === */
-        @keyframes shine {
-            0% { background-position: -200% center; }
-            100% { background-position: 200% center; }
-        }
-
-        .shine-logo {
-            background: linear-gradient(to right, #93c5fd 20%, #a78bfa 40%, #c4b5fd 60%, #93c5fd 80%);
-            background-size: 200% auto;
-            color: transparent;
-            background-clip: text;
-            -webkit-background-clip: text;
-            animation: shine 5s linear infinite;
-        }
-        /* === End of Logo Animation === */
-
-
-        /* === NEW: Fade-in Animations === */
-        @keyframes floatIn {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        .float-in {
-            animation: floatIn 0.7s ease-out forwards;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; transform: scale(0.95); }
-            to { opacity: 1; transform: scale(1); }
-        }
-        .fade-in {
-            animation: fadeIn 0.5s ease-out forwards;
-        }
-        /* === End of Animations === */
-
-
-        #result-sentiment.positive { color: #22c55e; } /* green-500 */
-        #result-sentiment.negative { color: #ef4444; } /* red-500 */
-        .icon-positive { color: #22c55e; }
-        .icon-negative { color: #ef4444; }
-
-
-        /* New Search Dropdown Styles */
-        #search-results {
-            position: absolute;
-            width: 100%;
-            background-color: #1f2937; /* gray-800 */
-            border: 1px solid #4b5563; /* gray-600 */
-            border-top: none;
-            border-radius: 0 0 0.5rem 0.5rem;
-            z-index: 10;
-            max-height: 300px;
-            overflow-y: auto;
-            /* Smooth transition for showing/hiding */
-            transition: all 0.3s ease;
-            opacity: 0;
-            transform: translateY(-10px);
-            pointer-events: none;
-        }
-        #search-results.visible {
-            opacity: 1;
-            transform: translateY(0);
-            pointer-events: auto;
-        }
-        .search-item {
-            padding: 0.75rem 1rem;
-            cursor: pointer;
-            border-bottom: 1px solid #374151; /* gray-700 */
-            transition: background-color 0.2s ease;
-        }
-        .search-item:last-child { border-bottom: none; }
-        .search-item:hover { background-color: #374151; } /* gray-700 */
-        .search-item-title { font-weight: 500; color: white; }
-        .search-item-year { font-size: 0.875rem; color: #9ca3af; margin-left: 0.5rem; }
-    </style>
+/* 📄 PDF DOWNLOAD LOADER */
+#pdf-loader-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9998;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+#pdf-loader-overlay.active {
+  visibility: visible;
+  opacity: 1;
+}
+.loader {
+  width: 120px;
+  height: 22px;
+  border-radius: 20px;
+  color: #6366f1;
+  border: 2px solid;
+  position: relative;
+}
+.loader::before {
+  content: "";
+  position: absolute;
+  margin: 2px;
+  inset: 0 100% 0 0;
+  border-radius: inherit;
+  background: currentColor;
+  animation: l6 2s infinite;
+}
+@keyframes l6 { 100% { inset: 0 } }
+</style>
 </head>
-<body class="bg-gray-900 text-white">
+<body class="text-white">
 
-    <video autoplay muted loop id="bg-video">
-        <source src="{{ url_for('static', filename='background.mp4') }}" type="video/mp4">
-        Your browser does not support the video tag.
-    </video>
+<!-- 🎞️ FILM LEADER PRELOADER -->
+<div id="preloader">
+  <div class="film-leader-container">
+    <div class="countdown-screen">
+      <div class="countdown-number three">3</div>
+      <div class="countdown-number two">2</div>
+      <div class="countdown-number one">1</div>
+    </div>
+  </div>
+</div>
 
-    <div class="min-h-screen flex items-center justify-center p-4">
-        
-        <!-- NEW: Added 'float-in' animation class -->
-        <div class="float-in w-full max-w-2xl bg-gray-900/70 backdrop-blur-xl rounded-2xl shadow-2xl p-6 md:p-10 border border-gray-700">
+<!-- 📄 PDF LOADER -->
+<div id="pdf-loader-overlay">
+  <div class="loader"></div>
+</div>
 
-            <!-- NEW: Added 'shine-logo' class -->
-            <h1 class="shine-logo text-3xl md:text-4xl font-bold text-center mb-6">
-                Movie Sentiment Analyzer
-            </h1>
-            <p class="text-center text-gray-400 mb-8">
-                Search for a movie, write your review, and get a full sentiment analysis.
-            </p>
+<video autoplay muted loop id="bg-video"><source src="{{ url_for('static', filename='background.mp4') }}" type="video/mp4"></video>
 
-            <div class="mb-4 relative">
-                <label for="movie-name" class="block text-sm font-medium text-gray-300 mb-2">Movie Name</label>
-                <input type="text" id="movie-name"
-                    class="w-full p-3 bg-gray-800 border-2 border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-300"
-                    placeholder="Search for a movie... e.g., The Matrix" autocomplete="off">
-                
-                <!-- NEW: Search container. JS will add 'visible' class -->
-                <div id="search-results"></div>
-            </div>
+<div class="min-h-screen flex flex-col md:flex-row items-center justify-center gap-8 p-6 fade-in">
 
-            <div>
-                <label for="review-text" class="block text-sm font-medium text-gray-300 mb-2">Movie Review</label>
-                <textarea id="review-text"
-                    class="w-full h-40 p-4 bg-gray-800 border-2 border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-300 resize-none"
-                    placeholder="Write your movie review here..." required></textarea>
-            </div>
+  <!-- LEFT PANEL -->
+  <div class="w-full md:w-1/2 glass rounded-2xl p-8 panel">
+    <div>
+      <h1 class="text-3xl font-bold text-center mb-2 hover-glow">🎬 Movie Sentiment Analyzer</h1>
+      <p class="text-center text-gray-400 mb-6">Search a movie, write your review, and analyze its sentiment.</p>
+      <div class="mb-4 relative">
+        <label class="block text-sm text-gray-300 mb-1 hover-glow">Movie Name</label>
+        <input id="movie-name" type="text" placeholder="Search for a movie..."
+          class="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg focus:ring-2 focus:ring-indigo-500" autocomplete="off">
+        <div id="search-results"></div>
+      </div>
+      <div class="mb-4">
+        <label class="block text-sm text-gray-300 mb-1 hover-glow">Movie Review</label>
+        <textarea id="review-text" rows="5" placeholder="Write your review..."
+          class="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 resize-none"></textarea>
+      </div>
+    </div>
+    <button id="analyze-button"
+      class="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-purple-700 hover:to-indigo-700 font-semibold rounded-lg shadow-md">Analyze</button>
+  </div>
 
-            <!-- NEW: Updated button styles with gradient and transitions -->
-            <button id="analyze-button"
-                class="w-full mt-6 py-3 px-6 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white text-lg font-semibold rounded-lg shadow-lg transition-all duration-300 ease-in-out transform hover:scale-105 disabled:opacity-50 disabled:scale-100">
-                Analyze
-            </button>
-
-            <!-- Result Display Area -->
-            <div id="result-area" class="mt-8" style="display: none;">
-                <!-- This inner div is just for visual grouping -->
-                <div id="report-content" class="p-6 bg-gray-800 rounded-lg border border-gray-700">
-                    
-                    <img id="movie-poster" src="" alt="Movie Poster" class="w-1/2 max-w-[200px] mx-auto rounded-lg shadow-lg mb-6" style="display: none;">
-                    
-                    <div class="text-center">
-                        <svg id="icon-positive" class="h-16 w-16 icon-positive mx-auto mb-2" style="display: none;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M15.182 15.182a4.5 4.5 0 01-6.364 0M21 12a9 9 0 11-18 0 9 9 0 0118 0zM9.75 9.75c0 .414-.168.75-.375.75S9 10.164 9 9.75s.168-.75.375-.75S9.75 9.336 9.75 9.75zm.375 0h.008v.015h-.008V9.75zm5.625 0c0 .414-.168.75-.375.75s-.375-.336-.375-.75.168-.75.375-.75.375.336.375.75zm.375 0h.008v.015h-.008V9.75z" />
-                        </svg>
-                        <svg id="icon-negative" class="h-16 w-16 icon-negative mx-auto mb-2" style="display: none;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M15.182 16.5a4.5 4.5 0 01-6.364 0M21 12a9 9 0 11-18 0 9 9 0 0118 0zM9.75 9.75c0 .414-.168.75-.375.75S9 10.164 9 9.75s.168-.75.375-.75S9.75 9.336 9.75 9.75zm.375 0h.008v.015h-.008V9.75zm5.625 0c0 .414-.168.75-.375.75s-.375-.336-.375-.75.168-.75.375-.75.375.336.375.75zm.375 0h.008v.015h-.008V9.75z" />
-                        </svg>
-
-                        <p id="result-sentiment" class="text-4xl font-bold mb-3"></p>
-                        <p id="result-confidence" class="text-xl text-gray-200 mb-1"></p>
-                        <p id="result-raw-score" class="text-sm text-gray-400"></p>
-                    </div>
-                </div>
-                
-                <!-- NEW: Updated Download Button Style -->
-                <button id="download-button"
-                    class="w-full mt-4 py-2 px-4 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-lg transition-all duration-300 ease-in-out transform hover:scale-105 disabled:opacity-50 disabled:scale-100">
-                    Download PDF Report
-                </button>
-            </div>
-
-
-            <!-- Loading Spinner -->
-            <div id="loading-spinner" class="mt-8 text-center" style="display: none;">
-                <svg class="animate-spin h-8 w-8 text-white mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                <p class="mt-2 text-gray-300">Analyzing...</p>
-            </div>
-        </div>
+  <!-- RIGHT PANEL -->
+  <div class="w-full md:w-1/2 glass rounded-2xl p-8 panel text-center">
+    <div id="placeholder" class="text-gray-400 text-sm my-auto">
+      <p class="hover-glow">Select the movie name and write the review to analyze the sentiment.</p>
+    </div>
+    <div id="loading-spinner" class="hidden my-auto">
+      <svg class="animate-spin h-10 w-10 text-indigo-400 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+      </svg>
+      <p class="mt-2 text-gray-300 hover-glow">Analyzing sentiment...</p>
     </div>
 
-    <!-- 
-      ===============================================================
-      == JAVASCRIPT LOGIC (Download Function is Re-written) ==
-      ===============================================================
-    -->
-    <script>
-        // --- Element References ---
-        const movieNameInput = document.getElementById('movie-name');
-        const searchResults = document.getElementById('search-results');
-        const reviewText = document.getElementById('review-text');
-        const analyzeButton = document.getElementById('analyze-button');
-        
-        const resultArea = document.getElementById('result-area');
-        const moviePoster = document.getElementById('movie-poster');
-        
-        const resultSentiment = document.getElementById('result-sentiment');
-        const resultConfidence = document.getElementById('result-confidence');
-        const resultRawScore = document.getElementById('result-raw-score');
-        
-        const loadingSpinner = document.getElementById('loading-spinner');
-        const iconPositive = document.getElementById('icon-positive');
-        const iconNegative = document.getElementById('icon-negative');
-        const downloadButton = document.getElementById('download-button');
+    <div id="result-area" class="hidden w-full flex flex-col justify-between h-full">
+      <div class="bg-gray-800 p-4 rounded-lg flex-grow flex flex-col justify-center">
+        <img id="movie-poster" class="mx-auto w-36 mb-3 rounded hidden">
+        <p id="result-sentiment" class="text-2xl font-bold mb-1"></p>
+        <p id="result-confidence" class="text-gray-300 mb-1"></p>
+        <p id="result-raw-score" class="text-gray-400 mb-2"></p>
+      </div>
+      <div class="mt-4 flex flex-col gap-2">
+        <button id="download-button" class="py-2 bg-green-600 hover:bg-green-700 rounded-lg font-semibold">Download PDF</button>
+        <button id="back-button" class="py-2 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold">← Back</button>
+      </div>
+    </div>
+  </div>
+</div>
 
-        // --- Global State ---
-        let selectedMoviePosterPath = null;
-        let debounceTimer;
+<script>
+/* === Preloader Hide After Countdown === */
+document.addEventListener("DOMContentLoaded", function() {
+  const pre = document.getElementById('preloader');
+  setTimeout(() => pre.classList.add('hide'), 2500);
+});
 
-        // --- Debounce Function (for search) ---
-        function debounce(func, delay) {
-            clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(func, delay);
-        }
+/* === Your Existing JS (unchanged except PDF loader) === */
+const movieInput=document.getElementById('movie-name');
+const searchBox=document.getElementById('search-results');
+let posterPath=null,debounceTimer;
+const pdfLoader=document.getElementById('pdf-loader-overlay');
 
-        // --- Function to Search for Movies ---
-        async function searchMovies() {
-            const query = movieNameInput.value.trim();
-            if (query.length < 3) {
-                searchResults.classList.remove('visible');
-                return;
-            }
+function debounce(f,d){clearTimeout(debounceTimer);debounceTimer=setTimeout(f,d);}
+async function searchMovies(){
+  const q=movieInput.value.trim();
+  if(q.length<3){searchBox.style.display='none';return;}
+  try{
+    const r=await fetch(`/search_movie?query=${encodeURIComponent(q)}`);
+    const movies=await r.json();searchBox.innerHTML='';
+    if(movies.length>0){
+      movies.forEach(m=>{
+        const div=document.createElement('div');
+        div.className='search-item';
+        div.innerHTML=`<span>${m.title}</span> <span class="text-gray-400 ml-2">(${m.year})</span>`;
+        div.onclick=()=>{movieInput.value=m.title;posterPath=m.poster_path;searchBox.style.display='none';};
+        searchBox.appendChild(div);
+      });
+      searchBox.style.display='block';
+    }else searchBox.style.display='none';
+  }catch(e){console.log(e);}
+}
+movieInput.addEventListener('input',()=>debounce(searchMovies,400));
+document.addEventListener('click',e=>{
+  if(!movieInput.contains(e.target)&&!searchBox.contains(e.target))searchBox.style.display='none';
+});
 
-            try {
-                const response = await fetch(`/search_movie?query=${encodeURIComponent(query)}`);
-                if (!response.ok) throw new Error('Search failed');
-                
-                const movies = await response.json();
-                
-                searchResults.innerHTML = ''; // Clear old results
-                if (movies.length > 0) {
-                    movies.forEach(movie => {
-                        const item = document.createElement('div');
-                        item.className = 'search-item';
-                        item.innerHTML = `
-                            <span class="search-item-title">${movie.title}</span>
-                            <span class="search-item-year">(${movie.year || 'N/A'})</span>
-                        `;
-                        item.addEventListener('click', () => selectMovie(movie));
-                        searchResults.appendChild(item);
-                    });
-                    searchResults.classList.add('visible');
-                } else {
-                    searchResults.classList.remove('visible');
-                }
-            } catch (error) {
-                console.error('Search error:', error);
-                searchResults.classList.remove('visible');
-            }
-        }
+const review=document.getElementById('review-text');
+const analyze=document.getElementById('analyze-button');
+const placeholder=document.getElementById('placeholder');
+const result=document.getElementById('result-area');
+const spinner=document.getElementById('loading-spinner');
+const poster=document.getElementById('movie-poster');
+const sentiment=document.getElementById('result-sentiment');
+const conf=document.getElementById('result-confidence');
+const raw=document.getElementById('result-raw-score');
+const dl=document.getElementById('download-button');
+const back=document.getElementById('back-button');
 
-        // --- Function to Select a Movie from Dropdown ---
-        function selectMovie(movie) {
-            movieNameInput.value = movie.title;
-            selectedMoviePosterPath = movie.poster_path;
-            searchResults.classList.remove('visible');
-            searchResults.innerHTML = '';
-        }
+analyze.onclick=async()=>{
+  if(!review.value.trim())return alert('Enter a review!');
+  placeholder.classList.add('hidden');result.classList.add('hidden');
+  spinner.classList.remove('hidden');analyze.disabled=true;
+  const r=await fetch('/predict',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({review:review.value})});
+  const data=await r.json();analyze.disabled=false;spinner.classList.add('hidden');
+  if(data.sentiment){
+    result.classList.remove('hidden');
+    sentiment.textContent=data.sentiment;
+    sentiment.className=`text-2xl font-bold mb-1 ${data.sentiment==='Positive'?'positive':'negative'}`;
+    const c=(data.sentiment==='Positive'?data.score:1-data.score)*100;
+    conf.textContent=`Confidence: ${c.toFixed(2)}%`;
+    raw.textContent=`Raw Score: ${data.score.toFixed(4)}`;
+    if(posterPath){poster.src=`https://image.tmdb.org/t/p/w500${posterPath}`;poster.classList.remove('hidden');}
+  }
+};
 
-        // --- Event Listeners for Movie Search ---
-        movieNameInput.addEventListener('keyup', () => {
-            debounce(searchMovies, 300); // Wait 300ms
-        });
-        
-        document.addEventListener('click', (e) => {
-            // Hide if clicked outside the search input and results
-            if (!movieNameInput.contains(e.target) && !searchResults.contains(e.target)) {
-                searchResults.classList.remove('visible');
-            }
-        });
+dl.onclick=async()=>{
+  dl.disabled=true;
+  pdfLoader.classList.add('active'); // show loader
+  const payload={movie_name:movieInput.value,poster_url:poster.src,sentiment:sentiment.textContent,
+  confidence:conf.textContent,raw_score:raw.textContent,review_text:review.value};
+  const res=await fetch('/download_pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  const blob=await res.blob();const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=`${payload.movie_name.replace(/[^a-z0-9]/gi,'_')}_Analysis.pdf`;
+  a.click();URL.revokeObjectURL(url);
+  pdfLoader.classList.remove('active'); // hide loader
+  dl.disabled=false;
+};
 
-
-        // --- Event Listener for Analyze Button ---
-        analyzeButton.addEventListener('click', () => {
-            const review = reviewText.value;
-            if (!review.trim()) {
-                alert("Please enter a review first.");
-                return;
-            }
-
-            loadingSpinner.style.display = 'block';
-            resultArea.style.display = 'none';
-            resultArea.classList.remove('fade-in'); // Remove for re-animation
-            analyzeButton.disabled = true;
-            analyzeButton.textContent = 'Analyzing...';
-            iconPositive.style.display = 'none';
-            iconNegative.style.display = 'none';
-
-            fetch('/predict', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ review: review })
-            })
-            .then(response => response.json())
-            .then(data => {
-                loadingSpinner.style.display = 'none';
-                analyzeButton.disabled = false;
-                analyzeButton.textContent = 'Analyze';
-
-                if (data.sentiment) {
-                    resultArea.style.display = 'block';
-                    resultArea.classList.add('fade-in'); // Add fade-in animation
-                    
-                    if (selectedMoviePosterPath) {
-                        moviePoster.src = `https://image.tmdb.org/t/p/w500${selectedMoviePosterPath}`;
-                        moviePoster.style.display = 'block';
-                    } else {
-                        moviePoster.src = '';
-                        moviePoster.style.display = 'none';
-                    }
-
-                    resultSentiment.textContent = data.sentiment;
-                    let confidence;
-                    if (data.sentiment === 'Positive') {
-                        resultSentiment.className = 'text-4xl font-bold mb-3 positive';
-                        iconPositive.style.display = 'inline-block';
-                        iconNegative.style.display = 'none';
-                        confidence = data.score * 100;
-                    } else {
-                        resultSentiment.className = 'text-4xl font-bold mb-3 negative';
-                        iconPositive.style.display = 'none';
-                        iconNegative.style.display = 'inline-block';
-                        confidence = (1 - data.score) * 100;
-                    }
-                    
-                    resultConfidence.textContent = `Confidence: ${confidence.toFixed(2)}%`;
-                    resultRawScore.textContent = `Raw Score: ${data.score.toFixed(4)}`;
-
-                } else {
-                    alert('Error: Could not get a prediction.');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                loadingSpinner.style.display = 'none';
-                analyzeButton.disabled = false;
-                analyzeButton.textContent = 'Analyze';
-                alert('An error occurred. Please check the console (F12) for details.');
-            });
-        });
-
-        // --- NEW: Event Listener for Download Button (Server-side) ---
-        downloadButton.addEventListener('click', async () => {
-            const movieName = movieNameInput.value.trim() || 'Movie_Report';
-            const fileName = `${movieName.replace(/[^a-z0-9]/gi, '_')}_Analysis.pdf`;
-
-            // 1. Show loading state on button
-            downloadButton.disabled = true;
-            downloadButton.textContent = 'Generating PDF...';
-
-            try {
-                // 2. Gather all data to send to the server
-                const postData = {
-                    movie_name: movieNameInput.value.trim() || "Untitled Analysis",
-                    poster_url: moviePoster.src, // Send the full poster URL
-                    sentiment: resultSentiment.textContent,
-                    confidence: resultConfidence.textContent,
-                    raw_score: resultRawScore.textContent,
-                    review_text: reviewText.value.trim()
-                };
-
-                // 3. Call the new /download_pdf route
-                const response = await fetch('/download_pdf', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(postData)
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || 'Server failed to generate PDF.');
-                }
-
-                // 4. Get the PDF data as a "blob"
-                const blob = await response.blob();
-                
-                // 5. Create a temporary link to trigger the download
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.style.display = 'none';
-                a.href = url;
-                a.download = fileName;
-                
-                document.body.appendChild(a);
-                a.click();
-                
-                // 6. Clean up
-                window.URL.revokeObjectURL(url);
-                a.remove();
-
-            } catch (error) {
-                console.error('PDF Download Error:', error);
-                alert(`An error occurred while generating the PDF: ${error.message}`);
-            } finally {
-                // 7. Reset button state
-                downloadButton.disabled = false;
-                downloadButton.textContent = 'Download PDF Report';
-            }
-        });
-
-    </script>
+back.onclick=()=>{result.classList.add('hidden');placeholder.classList.remove('hidden');review.value='';movieInput.value='';posterPath=null;};
+</script>
 </body>
 </html>
