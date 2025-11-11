@@ -10,8 +10,9 @@ from flask import Flask, request, jsonify, render_template, send_file
 from fpdf import FPDF
 from io import BytesIO
 
-# --- 1. PASTE YOUR TMDB API KEY HERE (INSIDE THE QUOTES) ---
-TMDb_API_KEY = "847cef22fea668d4fbabc932bde4b580"
+# --- 1. PASTE YOUR OMDb API KEY (THE STRING) HERE (INSIDE THE QUOTES) ---
+# --- Get your key from http://www.omdbapi.com/apikey.aspx ---
+OMDb_API_KEY = "243ca78d" 
 # -----------------------------------------------------------
 
 # Suppress TensorFlow warnings
@@ -54,6 +55,12 @@ def preprocess_text(text):
 def home():
     return render_template('index.html')
 
+# --- NEW ROUTE FOR ABOUT US PAGE ---
+@app.route('/about')
+def about_page():
+    return render_template('about.html')
+# -----------------------------------
+
 @app.route('/predict', methods=['POST'])
 def predict():
     try:
@@ -72,35 +79,51 @@ def predict():
         print(f"Error during prediction: {e}")
         return jsonify({'error': 'Error during prediction'}), 500
 
+# --- THIS ENTIRE FUNCTION IS UPDATED FOR OMDb ---
 @app.route('/search_movie', methods=['GET'])
 def search_movie():
     query = request.args.get('query')
     if not query:
         return jsonify({'error': 'No query provided'}), 400
     
-    if TMDb_API_KEY == "PASTE_YOUR_API_KEY_HERE":
-        print("ERROR: TMDb API Key is not set in app.py")
+    # Check if the API key is set
+    if not OMDb_API_KEY or OMDb_API_KEY == "PASTE_YOUR_OMDB_KEY_STRING_HERE":
+        print("ERROR: OMDb API Key is not set in app.py")
         return jsonify({'error': 'Server is not configured for movie search.'}), 500
         
     try:
-        url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDb_API_KEY}&query={query}&page=1"
+        # Build the new OMDb URL
+        # We use s= for search and type=movie to filter out TV shows
+        url = f"http://www.omdbapi.com/?apikey={OMDb_API_KEY}&s={query}&type=movie"
+        
         response = requests.get(url)
-        response.raise_for_status()
+        response.raise_for_status() # This will catch HTTP errors
         data = response.json()
         
         movies = []
-        for movie in data.get('results', [])[:5]:
-            movies.append({
-                'title': movie.get('title'),
-                'year': movie.get('release_date', 'N/A').split('-')[0],
-                'poster_path': movie.get('poster_path')
-            })
+        # OMDb returns "True" or "False" (as strings)
+        if data.get('Response') == 'True':
+            # The list of movies is under the "Search" key
+            for movie in data.get('Search', [])[:5]:
+                movies.append({
+                    'title': movie.get('Title'),
+                    'year': movie.get('Year'),
+                    # OMDb provides the FULL poster URL.
+                    # We will send this full URL to the frontend.
+                    'poster_path': movie.get('Poster') 
+                })
         
+        # This will correctly return an empty list if no movies are found
         return jsonify(movies)
         
     except requests.exceptions.RequestException as e:
-        print(f"TMDb API Error: {e}")
+        print(f"OMDb API Error: {e}")
         return jsonify({'error': 'Could not contact movie database.'}), 500
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+        return jsonify({'error': 'An unexpected server error occurred.'}), 500
+# --- END OF UPDATED FUNCTION ---
+
 
 # --- ROUTE: For PDF Generation (WITH FIX) ---
 @app.route('/download_pdf', methods=['POST'])
@@ -138,7 +161,8 @@ def download_pdf():
         pdf.multi_cell(0, 12, movie_name, 0, 'C') # Use sanitized name
         pdf.ln(10)
 
-        if poster_url and 'http' in poster_url:
+        # Poster URL logic is now simpler, as the frontend sends the full URL
+        if poster_url and 'http' in poster_url and poster_url != 'N/A':
             try:
                 response = requests.get(poster_url)
                 response.raise_for_status()
