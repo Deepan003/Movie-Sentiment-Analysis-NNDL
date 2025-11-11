@@ -240,5 +240,8 @@ def download_pdf():
         return jsonify({'error': f'PDF Generation Error: {e}'}), 500
 
 if __name__ == '__main__':
-    print("\nStarting Flask server... Go to http://127.0.0.1:5000 in your browser.")
-    app.run(debug=True)
+    # Get port from environment variable, default to 5000 for local
+    port = int(os.environ.get('PORT', 5000)) 
+    print(f"\nStarting Flask server... Go to http://127.0.0.1:{port} in your browser.")
+    # Run in production mode (debug=False) on all available interfaces
+    app.run(debug=False, host='0.0.0.0', port=port)
